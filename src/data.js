@@ -68,15 +68,6 @@ export const HOTEL = {
   ],
 };
 
-export const VERSION_CHANGES = [
-  { k: "Outbound route", v1: "Salerno (QSR) → Dubai", v2: "Rome Fiumicino (FCO) → Dubai" },
-  { k: "Outbound date / time", v1: "22 Nov · 12:15–21:30", v2: "21 Nov · 14:55–23:25" },
-  { k: "Outbound flight", v1: "flydubai EX2132", v2: "Emirates EK 098" },
-  { k: "Return route", v1: "Dubai → Salerno (QSR)", v2: "Dubai → Rome Fiumicino (FCO)" },
-  { k: "Return date / time", v1: "27 Nov · 06:30–10:45", v2: "27 Nov · 08:55–12:40" },
-  { k: "Return flight", v1: "flydubai EX2133", v2: "Emirates EK 097" },
-];
-
 // ---- SCHEDULE -------------------------------------------------
 // tag: "top" = ⭐ Top specialistic event · "key" = 🔑 Important meeting
 // cat colors: travel(navy) free(green) bim(teal) big5(coral) partner(gold)

@@ -278,3 +278,56 @@ b, strong { color: #ffffff; }
 .tab-on { color: #ffffff; font-weight: 900; background: rgba(56, 214, 232, 0.14); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .tab-icon { font-size: 18px; position: relative; }
 .dot { position: absolute; top: -4px; right: -10px; background: var(--coral); color: #ffffff; font-size: 9px; font-weight: 900; border-radius: 99px; min-width: 15px; height: 15px; display: grid; place-items: center; padding: 0 3px; box-shadow: 0 0 8px rgba(255, 122, 85, 0.7); }
+
+/* ============================================================
+   v2.2 — logo, animations, CSV buttons
+   ============================================================ */
+.topbar-brand { display: inline-flex; align-items: center; gap: 8px; }
+.hero-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+.logo { filter: drop-shadow(0 0 8px rgba(56, 214, 232, 0.5)); flex: 0 0 auto; }
+.logo-dot { animation: logo-fly 3.2s ease-in-out infinite; }
+@keyframes logo-fly {
+  0% { transform: translateX(0); opacity: 1; }
+  48% { transform: translateX(24px); opacity: 1; }
+  55% { opacity: 0; }
+  60% { transform: translateX(0); opacity: 0; }
+  70% { opacity: 1; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+/* entrance animations */
+.fade-up { animation: fade-up 0.45s both ease-out; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.slide-in { animation: slide-in 0.3s both ease-out; }
+@keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.pulse { display: inline-block; animation: pulse 1.8s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+
+/* progress shimmer + animated big5 band */
+.progress-fill { position: relative; overflow: hidden; }
+.progress-fill::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+  animation: shimmer 2.4s linear infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.big5-band { background-size: 200% 100%; animation: band 6s linear infinite; }
+@keyframes band { from { background-position: 0% 0; } to { background-position: 200% 0; } }
+.hero::before { animation: sweep 5.5s ease-in-out infinite; }
+@keyframes sweep { 0%, 100% { transform: translateX(-35%); } 50% { transform: translateX(35%); } }
+
+/* notes extras */
+.notes-ico { margin-right: 2px; }
+.notes-foot { display: flex; justify-content: space-between; align-items: center; }
+.notes-clear { border: 1px solid rgba(255, 122, 85, 0.6); background: rgba(255, 122, 85, 0.10); color: var(--coral); border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
+.notes-counter { font-size: 13px; color: var(--text); }
+.notes-count { color: var(--cyan); font-weight: 900; font-size: 18px; margin-right: 4px; }
+.btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 11px; }
+.btnrow .export { margin: 0; width: 100%; }
+.export-csv { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 10px rgba(242, 182, 92, 0.25); }
+.export-csv:active, .export:active { transform: scale(0.97); }
+.tier .export-csv { margin: 4px auto 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up, .slide-in, .pulse, .logo-dot, .progress-fill::after, .big5-band, .hero::before { animation: none; }
+}

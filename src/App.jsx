@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  TRIP, FLIGHTS, TICKETS, HOTEL, VERSION_CHANGES, DAYS,
+  TRIP, FLIGHTS, TICKETS, HOTEL, DAYS,
   BIG5_HOURS, GAME_PLAN, TALKS, ZONES, TIERS,
   REMINDERS, PACKING, ESSENTIALS, TRANSPORT, ETIQUETTE, EMERGENCY, QUICKREF,
 } from "./data.js";
@@ -42,6 +42,32 @@ function defaultDayId() {
 const eventId = (dayId, idx) => `ev:${dayId}:${idx}`;
 const standId = (tierId, company) => `st:${tierId}:${company}`;
 
+// ---------- Logo (animated SVG) ---------------------------------
+function Logo({ size = 34 }) {
+  return (
+    <svg className="logo" width={size} height={size} viewBox="0 0 64 64" aria-label="BIM Tour Dubai logo">
+      <defs>
+        <linearGradient id="lgA" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#38d6e8" />
+          <stop offset="1" stopColor="#1b5a82" />
+        </linearGradient>
+        <linearGradient id="lgB" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#f2b65c" />
+          <stop offset="1" stopColor="#ffe3ae" />
+        </linearGradient>
+      </defs>
+      {/* hexagon = BIM */}
+      <polygon points="32,3 58,18 58,46 32,61 6,46 6,18" fill="none" stroke="url(#lgA)" strokeWidth="3.5" strokeLinejoin="round" />
+      {/* Burj-style spire = Dubai */}
+      <polygon points="32,10 39,44 32,40 25,44" fill="url(#lgB)" />
+      <rect x="30.6" y="6" width="2.8" height="7" rx="1.2" fill="url(#lgB)" />
+      {/* ground line + plane dot */}
+      <line x1="16" y1="48" x2="48" y2="48" stroke="#38d6e8" strokeWidth="2.4" strokeLinecap="round" />
+      <circle className="logo-dot" cx="20" cy="48" r="2.6" fill="#f2b65c" />
+    </svg>
+  );
+}
+
 // ---------- tiny UI atoms ---------------------------------------
 function Section({ title, children }) {
   return (
@@ -81,17 +107,18 @@ function Tag({ tag }) {
 }
 
 // ---------- Notes & contacts panel ------------------------------
-function NotesPanel({ id, notes, setNote }) {
+function NotesPanel({ id, notes, setNote, clearNote }) {
   const n = notes[id] || {};
   const has = !!(n.contact || n.text);
   const [open, setOpen] = useState(false);
   return (
     <div>
       <button className={`notes-toggle ${has ? "has-notes" : ""}`} onClick={() => setOpen(!open)}>
-        {has ? "📝 Notes saved" : "➕ Add notes / contact"} {open ? "▲" : "▼"}
+        <span className={has ? "notes-ico pulse" : "notes-ico"}>{has ? "📝" : "➕"}</span>
+        {has ? "Notes saved — tap to view" : "Add notes / contact"} {open ? "▲" : "▼"}
       </button>
       {open && (
-        <div className="notes-panel">
+        <div className="notes-panel slide-in">
           <div>
             <label>👤 Contact (name · role · phone · email)</label>
             <input
@@ -108,7 +135,12 @@ function NotesPanel({ id, notes, setNote }) {
               onChange={(e) => setNote(id, "text", e.target.value)}
             />
           </div>
-          {has && <div className="notes-saved">✓ saved on this phone</div>}
+          {has && (
+            <div className="notes-foot">
+              <button className="notes-clear" onClick={() => { if (window.confirm("Clear this note?")) clearNote(id); }}>🗑 Clear</button>
+              <span className="notes-saved">✓ auto-saved on this phone</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -124,7 +156,7 @@ function Home({ done, notes, goto, exportNotes }) {
   return (
     <>
       <div className="hero">
-        <div className="hero-kicker">TRAVEL PLAN & ITINERARY · VERSION 2</div>
+        <div className="hero-brand"><Logo size={52} /><div className="hero-kicker">TRAVEL PLAN & ITINERARY · VERSION 2</div></div>
         <h1>{TRIP.title}</h1>
         <div className="hero-sub">{TRIP.subtitle}</div>
         <div className="hero-dates">{TRIP.dates} · Dubai, UAE</div>
@@ -160,18 +192,21 @@ function Home({ done, notes, goto, exportNotes }) {
         </div>
       </Section>
 
-      <Section title="📝 Field notes">
-        <div className="progress-wrap" onClick={exportNotes}>
-          <div className="progress-label" style={{ margin: 0 }}>
-            <b>{notesCount}</b> notes / contacts captured so far — tap to <b style={{ color: COLOR.teal }}>copy ALL notes</b> as text (ready to paste into email / CRM).
+      <Section title="📝 Field notes & leads">
+        <div className="progress-wrap">
+          <div className="notes-counter"><span className="notes-count pulse">{notesCount}</span> notes / contacts captured — linked to your meeting plan & stand targets.</div>
+          <div className="btnrow">
+            <button className="export" onClick={exportNotes}>📋 Copy all (text)</button>
+            <button className="export export-csv" onClick={() => downloadCSV(notes)}>📊 Download .CSV</button>
           </div>
+          <div className="small grey" style={{ marginTop: 8 }}>CSV columns: Type · Date · Time · Company/Event · Tier · Stand · Contact · Notes — opens straight in Excel.</div>
         </div>
       </Section>
 
       <Section title="✨ What's new in Version 2">
         <Callout color="gold">
           <ul className="list">
-            <li><b>Flights:</b> Emirates direct from <b>Rome Fiumicino (FCO)</b> instead of Salerno — out <b>Sat 21 Nov</b>, back <b>Fri 27 Nov</b>.</li>
+            <li><b>Flights:</b> Emirates direct from <b>Rome Fiumicino (FCO)</b> — out <b>Sat 21 Nov</b>, back <b>Fri 27 Nov</b>.</li>
             <li><b>Hotel:</b> same hotel, <b>Canal Central</b>, now from <b>21 Nov</b> (6 nights).</li>
             <li><b>Bonus:</b> free day on <b>Sun 22 Nov</b> to rest and prepare.</li>
             <li><b>Unchanged:</b> every appointment from Version 1 + Big 5 show days.</li>
@@ -242,20 +277,12 @@ function Travel() {
         </Callout>
       </Section>
 
-      <Section title="🔄 What changed vs. Version 1">
-        <div className="vtable">
-          <div className="vt-row vt-head"><div /><div>V1 (old)</div><div>V2 (now)</div></div>
-          {VERSION_CHANGES.map((c, i) => (
-            <div className="vt-row" key={i}><div className="vt-k">{c.k}</div><div className="vt-old">{c.v1}</div><div className="vt-new">{c.v2}</div></div>
-          ))}
-        </div>
-      </Section>
     </>
   );
 }
 
 // ---------- TAB: SCHEDULE (date-filtered) -----------------------
-function Schedule({ selectedDay, setSelectedDay, notes, setNote }) {
+function Schedule({ selectedDay, setSelectedDay, notes, setNote, clearNote }) {
   const day = DAYS.find((d) => d.id === selectedDay) || DAYS[0];
   const t = todayISO();
   return (
@@ -287,8 +314,8 @@ function Schedule({ selectedDay, setSelectedDay, notes, setNote }) {
 
       <div className="events">
         {day.events.map((e, i) => (
-          <div className={`event ${e.tag === "top" ? "event-top" : ""}`} key={i}
-            style={{ borderLeftColor: COLOR[CAT[e.cat]] }}>
+          <div className={`event fade-up ${e.tag === "top" ? "event-top" : ""}`} key={`${day.id}-${i}`}
+            style={{ borderLeftColor: COLOR[CAT[e.cat]], animationDelay: `${i * 70}ms` }}>
             <div className="event-row">
               <div className="event-time" style={{ color: COLOR[CAT[e.cat]] }}>{e.time}</div>
               <div className="event-main">
@@ -296,7 +323,7 @@ function Schedule({ selectedDay, setSelectedDay, notes, setNote }) {
                 <div className="event-where">📍 {e.where} · <span className="event-cat" style={{ color: COLOR[CAT[e.cat]] }}>{CAT_LABEL[e.cat]}</span></div>
               </div>
             </div>
-            <NotesPanel id={eventId(day.id, i)} notes={notes} setNote={setNote} />
+            <NotesPanel id={eventId(day.id, i)} notes={notes} setNote={setNote} clearNote={clearNote} />
           </div>
         ))}
       </div>
@@ -318,7 +345,7 @@ function Schedule({ selectedDay, setSelectedDay, notes, setNote }) {
 }
 
 // ---------- TAB: BIG 5 ------------------------------------------
-function Big5({ notes, setNote }) {
+function Big5({ notes, setNote, clearNote }) {
   const [open, setOpen] = useState("t1");
   return (
     <>
@@ -357,13 +384,14 @@ function Big5({ notes, setNote }) {
                     <div className="card-stand">📍 {r[1]}</div>
                     <div className="card-why">{r[2]}</div>
                     {r[3] && <div className="card-ask">🎙️ Ask for: <b>{r[3]}</b></div>}
-                    <NotesPanel id={standId(tier.id, r[0])} notes={notes} setNote={setNote} />
+                    <NotesPanel id={standId(tier.id, r[0])} notes={notes} setNote={setNote} clearNote={clearNote} />
                   </div>
                 ))}
               </div>
             )}
           </div>
         ))}
+        <button className="export export-csv" onClick={() => downloadCSV(notes)}>📊 Export stand notes & contacts (.CSV)</button>
         <Callout color="grey">📍 The partner list says "Hall 4"; 2026 Big 5 materials place digital & geospatial zones in the <b>Za'abeel Halls</b>. Confirm every stand in the official app on Sunday 22.</Callout>
       </Section>
 
@@ -490,6 +518,44 @@ function buildNotesText(notes) {
   return lines.join("\n");
 }
 
+// ---------- export notes as CSV (companies / partners / meetings) ----
+function csvCell(v) {
+  const t = String(v == null ? "" : v).replace(/"/g, '""');
+  return `"${t}"`;
+}
+function buildNotesCSV(notes) {
+  const SEP = ";"; // Italian Excel default
+  const rows = [["Type", "Date", "Time", "Company / Event", "Tier / Category", "Stand / Location", "Contact", "Notes"]];
+  DAYS.forEach((d) => {
+    d.events.forEach((e, i) => {
+      const n = notes[eventId(d.id, i)];
+      if (n && (n.contact || n.text)) {
+        rows.push(["Meeting / Agenda", `${d.dow} ${d.num} Nov 2026`, e.time, e.what, CAT_LABEL[e.cat] || "", e.where, n.contact || "", n.text || ""]);
+      }
+    });
+  });
+  TIERS.forEach((tier) => {
+    tier.rows.forEach((r) => {
+      const n = notes[standId(tier.id, r[0])];
+      if (n && (n.contact || n.text)) {
+        rows.push(["Stand visit", "Big 5 · 23–26 Nov 2026", "", r[0], tier.name, r[1], n.contact || "", n.text || ""]);
+      }
+    });
+  });
+  return "\ufeff" + rows.map((r) => r.map(csvCell).join(SEP)).join("\r\n");
+}
+function downloadCSV(notes) {
+  const blob = new Blob([buildNotesCSV(notes)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "BIM-Tour-Dubai-2026-leads.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 // ---------- ROOT ------------------------------------------------
 const TABS = [
   { id: "home", icon: "🏠", label: "Trip" },
@@ -517,6 +583,8 @@ export default function App() {
   const reset = () => { if (window.confirm("Reset all checkmarks?")) setDone({}); };
   const setNote = (id, field, value) =>
     setNotes((m) => ({ ...m, [id]: { ...(m[id] || {}), [field]: value } }));
+  const clearNote = (id) =>
+    setNotes((m) => { const c = { ...m }; delete c[id]; return c; });
   const goto = (t, dayId) => { setTab(t); if (dayId) setSelectedDay(dayId); window.scrollTo(0, 0); };
 
   const exportNotes = async () => {
@@ -534,15 +602,15 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="topbar-title">✈️ Dubai 2026 · Big 5 Global</span>
+        <span className="topbar-brand"><Logo size={26} /><span className="topbar-title">Dubai 2026 · Big 5 Global</span></span>
         <span className="topbar-badge">{TRIP.dates}</span>
       </header>
 
       <main className="content">
         {tab === "home" && <Home done={done} notes={notes} goto={goto} exportNotes={exportNotes} />}
         {tab === "travel" && <Travel />}
-        {tab === "schedule" && <Schedule selectedDay={selectedDay} setSelectedDay={setSelectedDay} notes={notes} setNote={setNote} />}
-        {tab === "big5" && <Big5 notes={notes} setNote={setNote} />}
+        {tab === "schedule" && <Schedule selectedDay={selectedDay} setSelectedDay={setSelectedDay} notes={notes} setNote={setNote} clearNote={clearNote} />}
+        {tab === "big5" && <Big5 notes={notes} setNote={setNote} clearNote={clearNote} />}
         {tab === "reminders" && <Reminders done={done} toggle={toggle} reset={reset} />}
         {tab === "info" && <Info />}
       </main>
