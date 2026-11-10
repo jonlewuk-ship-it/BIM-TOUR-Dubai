@@ -5,22 +5,44 @@ import {
   REMINDERS, PACKING, ESSENTIALS, TRANSPORT, ETIQUETTE, EMERGENCY, QUICKREF,
 } from "./data.js";
 
-// ---------- persisted checklist state --------------------------
-const LS_KEY = "bimtour-dubai-2026-done";
-function loadDone() {
+// ---------- persisted state (localStorage) ----------------------
+const LS_DONE = "bimtour-dubai-2026-done";
+const LS_NOTES = "bimtour-dubai-2026-notes";
+function load(key) {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-const COLOR = { navy: "#0B3954", teal: "#087E8B", gold: "#C8963E", coral: "#E4572E", green: "#3E8E5E", grey: "#6B7B8C" };
+const COLOR = { navy: "#1b5a82", teal: "#0fb3c4", gold: "#f2b65c", coral: "#ff7a55", green: "#52de97", grey: "#8fa6b4" };
 const CAT = { travel: "navy", free: "green", bim: "teal", big5: "coral", partner: "gold" };
 const CAT_LABEL = { travel: "TRAVEL", free: "FREE DAY", bim: "BIM TOUR", big5: "BIG 5", partner: "MEETING" };
 
-// ---------- tiny UI atoms --------------------------------------
+// trip calendar: dayId → ISO date (for "today" detection & filtering)
+const DAY_DATES = {
+  sat21: "2026-11-21", sun22: "2026-11-22", mon23: "2026-11-23", tue24: "2026-11-24",
+  wed25: "2026-11-25", thu26: "2026-11-26", fri27: "2026-11-27",
+};
+function todayISO() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function defaultDayId() {
+  const t = todayISO();
+  const hit = Object.entries(DAY_DATES).find(([, iso]) => iso === t);
+  if (hit) return hit[0];
+  return t > DAY_DATES.fri27 ? "fri27" : "sat21";
+}
+
+// stable ids for notes
+const eventId = (dayId, idx) => `ev:${dayId}:${idx}`;
+const standId = (tierId, company) => `st:${tierId}:${company}`;
+
+// ---------- tiny UI atoms ---------------------------------------
 function Section({ title, children }) {
   return (
     <section className="section">
@@ -45,7 +67,7 @@ function KV({ rows }) {
 
 function Callout({ color = "teal", title, children }) {
   return (
-    <div className="callout" style={{ borderLeftColor: COLOR[color], background: `${COLOR[color]}14` }}>
+    <div className="callout" style={{ borderLeftColor: COLOR[color] }}>
       {title && <div className="callout-title" style={{ color: COLOR[color] }}>{title}</div>}
       {children}
     </div>
@@ -58,11 +80,47 @@ function Tag({ tag }) {
   return null;
 }
 
-// ---------- TAB: HOME ------------------------------------------
-function Home({ done, goto }) {
+// ---------- Notes & contacts panel ------------------------------
+function NotesPanel({ id, notes, setNote }) {
+  const n = notes[id] || {};
+  const has = !!(n.contact || n.text);
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button className={`notes-toggle ${has ? "has-notes" : ""}`} onClick={() => setOpen(!open)}>
+        {has ? "📝 Notes saved" : "➕ Add notes / contact"} {open ? "▲" : "▼"}
+      </button>
+      {open && (
+        <div className="notes-panel">
+          <div>
+            <label>👤 Contact (name · role · phone · email)</label>
+            <input
+              value={n.contact || ""}
+              placeholder="e.g. Ahmed K. · BIM Manager · +971 50 … · a.k@…"
+              onChange={(e) => setNote(id, "contact", e.target.value)}
+            />
+          </div>
+          <div>
+            <label>🗒️ Notes / outcome / next step</label>
+            <textarea
+              value={n.text || ""}
+              placeholder="What was discussed, interest level, follow-up action…"
+              onChange={(e) => setNote(id, "text", e.target.value)}
+            />
+          </div>
+          {has && <div className="notes-saved">✓ saved on this phone</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- TAB: HOME -------------------------------------------
+function Home({ done, notes, goto, exportNotes }) {
   const total = REMINDERS.length + PACKING.length;
   const doneCount = [...REMINDERS, ...PACKING].filter((x) => done[x.id]).length;
   const pct = Math.round((doneCount / total) * 100);
+  const notesCount = Object.values(notes).filter((n) => n && (n.contact || n.text)).length;
   return (
     <>
       <div className="hero">
@@ -75,7 +133,7 @@ function Home({ done, goto }) {
 
       <div className="stats">
         {TRIP.stats.map((s, i) => (
-          <div className="stat" key={i} style={{ background: [COLOR.teal, COLOR.gold, COLOR.coral, COLOR.green][i] }}>
+          <div className="stat" key={i} style={{ background: [COLOR.teal, COLOR.gold, COLOR.coral, COLOR.green][i], color: "#08141a" }}>
             <div className="stat-big">{s.big}</div>
             <div className="stat-small">{s.small}</div>
           </div>
@@ -102,6 +160,14 @@ function Home({ done, goto }) {
         </div>
       </Section>
 
+      <Section title="📝 Field notes">
+        <div className="progress-wrap" onClick={exportNotes}>
+          <div className="progress-label" style={{ margin: 0 }}>
+            <b>{notesCount}</b> notes / contacts captured so far — tap to <b style={{ color: COLOR.teal }}>copy ALL notes</b> as text (ready to paste into email / CRM).
+          </div>
+        </div>
+      </Section>
+
       <Section title="✨ What's new in Version 2">
         <Callout color="gold">
           <ul className="list">
@@ -116,7 +182,7 @@ function Home({ done, goto }) {
   );
 }
 
-// ---------- TAB: TRAVEL ----------------------------------------
+// ---------- TAB: TRAVEL -----------------------------------------
 function Travel() {
   return (
     <>
@@ -188,21 +254,31 @@ function Travel() {
   );
 }
 
-// ---------- TAB: SCHEDULE --------------------------------------
-function Schedule({ selectedDay, setSelectedDay }) {
+// ---------- TAB: SCHEDULE (date-filtered) -----------------------
+function Schedule({ selectedDay, setSelectedDay, notes, setNote }) {
   const day = DAYS.find((d) => d.id === selectedDay) || DAYS[0];
+  const t = todayISO();
   return (
     <>
       <div className="day-chips">
-        {DAYS.map((d) => (
-          <button key={d.id}
-            className={`chip ${d.id === day.id ? "chip-on" : ""}`}
-            style={d.id === day.id ? { background: COLOR[d.color], borderColor: COLOR[d.color] } : {}}
-            onClick={() => setSelectedDay(d.id)}>
-            <span className="chip-dow">{d.dow}</span><span className="chip-num">{d.num}</span>
-          </button>
-        ))}
+        {DAYS.map((d) => {
+          const iso = DAY_DATES[d.id];
+          const isPast = iso < t;
+          const isToday = iso === t;
+          const on = d.id === day.id;
+          return (
+            <button key={d.id}
+              className={`chip ${on ? "chip-on" : ""} ${isPast && !on ? "chip-past" : ""}`}
+              style={on ? { background: COLOR[d.color] } : {}}
+              onClick={() => setSelectedDay(d.id)}>
+              <span className="chip-dow">{d.dow}</span>
+              <span className="chip-num">{d.num}</span>
+              <span className="chip-today">{isToday ? "TODAY" : ""}</span>
+            </button>
+          );
+        })}
       </div>
+      <div className="filter-note">🔎 Filtered view: only <b>{day.dow} {day.num} Nov</b> is shown — past & future days are excluded. Tap another date to switch.</div>
 
       <div className="day-head" style={{ background: COLOR[day.color] }}>
         <div className="day-head-title">{day.dow} {day.num} NOV · {day.title}</div>
@@ -213,11 +289,14 @@ function Schedule({ selectedDay, setSelectedDay }) {
         {day.events.map((e, i) => (
           <div className={`event ${e.tag === "top" ? "event-top" : ""}`} key={i}
             style={{ borderLeftColor: COLOR[CAT[e.cat]] }}>
-            <div className="event-time" style={{ color: COLOR[CAT[e.cat]] }}>{e.time}</div>
-            <div className="event-main">
-              <div className="event-what">{e.what} <Tag tag={e.tag} /></div>
-              <div className="event-where">📍 {e.where} · <span className="event-cat" style={{ color: COLOR[CAT[e.cat]] }}>{CAT_LABEL[e.cat]}</span></div>
+            <div className="event-row">
+              <div className="event-time" style={{ color: COLOR[CAT[e.cat]] }}>{e.time}</div>
+              <div className="event-main">
+                <div className="event-what">{e.what} <Tag tag={e.tag} /></div>
+                <div className="event-where">📍 {e.where} · <span className="event-cat" style={{ color: COLOR[CAT[e.cat]] }}>{CAT_LABEL[e.cat]}</span></div>
+              </div>
             </div>
+            <NotesPanel id={eventId(day.id, i)} notes={notes} setNote={setNote} />
           </div>
         ))}
       </div>
@@ -238,15 +317,15 @@ function Schedule({ selectedDay, setSelectedDay }) {
   );
 }
 
-// ---------- TAB: BIG 5 -----------------------------------------
-function Big5() {
+// ---------- TAB: BIG 5 ------------------------------------------
+function Big5({ notes, setNote }) {
   const [open, setOpen] = useState("t1");
   return (
     <>
       <Section title="🕘 Opening hours · DWTC">
         <div className="hours">
           {BIG5_HOURS.map((h, i) => (
-            <div className="hour" key={i} style={{ background: [COLOR.teal, COLOR.teal, COLOR.gold, COLOR.coral][i] }}>
+            <div className="hour" key={i} style={{ background: [COLOR.teal, COLOR.teal, COLOR.gold, COLOR.coral][i], color: "#08141a" }}>
               <b>{h.day}</b><span>{h.hours}</span>
             </div>
           ))}
@@ -263,21 +342,22 @@ function Big5() {
         ))}
       </Section>
 
-      <Section title="🤝 Exhibitors to meet — by tier">
-        {TIERS.map((t) => (
-          <div className="tier" key={t.id}>
-            <button className="tier-head" style={{ background: COLOR[t.color] }} onClick={() => setOpen(open === t.id ? "" : t.id)}>
-              <span>{t.medal} {t.name}</span><span>{open === t.id ? "▲" : "▼"}</span>
+      <Section title="🤝 Stand visits — targets by tier (tap a card to log the visit)">
+        {TIERS.map((tier) => (
+          <div className="tier" key={tier.id}>
+            <button className="tier-head" style={{ background: COLOR[tier.color] }} onClick={() => setOpen(open === tier.id ? "" : tier.id)}>
+              <span style={{ color: "#08141a" }}>{tier.medal} {tier.name}</span><span style={{ color: "#08141a" }}>{open === tier.id ? "▲" : "▼"}</span>
             </button>
-            {open === t.id && (
+            {open === tier.id && (
               <div className="tier-body">
-                <div className="tier-note">{t.note}</div>
-                {t.rows.map((r, i) => (
+                <div className="tier-note">{tier.note}</div>
+                {tier.rows.map((r, i) => (
                   <div className="card" key={i}>
                     <div className="card-title">{r[0]}</div>
                     <div className="card-stand">📍 {r[1]}</div>
                     <div className="card-why">{r[2]}</div>
                     {r[3] && <div className="card-ask">🎙️ Ask for: <b>{r[3]}</b></div>}
+                    <NotesPanel id={standId(tier.id, r[0])} notes={notes} setNote={setNote} />
                   </div>
                 ))}
               </div>
@@ -288,12 +368,12 @@ function Big5() {
       </Section>
 
       <Section title="🗣️ Talks & summits (official 2026 agenda)">
-        {TALKS.map((t, i) => (
+        {TALKS.map((tk, i) => (
           <div className="talks" key={i}>
-            <div className="talks-venue">{t.venue}</div>
+            <div className="talks-venue">{tk.venue}</div>
             <div className="talks-grid">
-              <div><b>MON</b> {t.mon}</div><div><b>TUE</b> {t.tue}</div>
-              <div><b>WED</b> {t.wed}</div><div><b>THU</b> {t.thu}</div>
+              <div><b>MON</b> {tk.mon}</div><div><b>TUE</b> {tk.tue}</div>
+              <div><b>WED</b> {tk.wed}</div><div><b>THU</b> {tk.thu}</div>
             </div>
           </div>
         ))}
@@ -313,7 +393,7 @@ function Big5() {
   );
 }
 
-// ---------- TAB: REMINDERS -------------------------------------
+// ---------- TAB: REMINDERS --------------------------------------
 function Check({ item, done, toggle }) {
   const ok = !!done[item.id];
   return (
@@ -344,7 +424,7 @@ function Reminders({ done, toggle, reset }) {
   );
 }
 
-// ---------- TAB: INFO ------------------------------------------
+// ---------- TAB: INFO -------------------------------------------
 function Info() {
   return (
     <>
@@ -360,7 +440,7 @@ function Info() {
       <Section title="🚨 Emergency numbers">
         <div className="hours">
           {EMERGENCY.map((e, i) => (
-            <a className="hour" key={i} href={`tel:${e.n}`} style={{ background: COLOR[e.c] }}>
+            <a className="hour" key={i} href={`tel:${e.n}`} style={{ background: COLOR[e.c], color: "#08141a" }}>
               <b>{e.n}</b><span>{e.l}</span>
             </a>
           ))}
@@ -381,7 +461,36 @@ function Info() {
   );
 }
 
-// ---------- ROOT -----------------------------------------------
+// ---------- export all notes as plain text ----------------------
+function buildNotesText(notes) {
+  const lines = ["BIM TOUR DUBAI 2026 — FIELD NOTES & CONTACTS", "============================================", ""];
+  DAYS.forEach((d) => {
+    d.events.forEach((e, i) => {
+      const n = notes[eventId(d.id, i)];
+      if (n && (n.contact || n.text)) {
+        lines.push(`▶ ${d.dow} ${d.num} NOV · ${e.time} · ${e.what} (${e.where})`);
+        if (n.contact) lines.push(`   Contact: ${n.contact}`);
+        if (n.text) lines.push(`   Notes:   ${n.text}`);
+        lines.push("");
+      }
+    });
+  });
+  TIERS.forEach((tier) => {
+    tier.rows.forEach((r) => {
+      const n = notes[standId(tier.id, r[0])];
+      if (n && (n.contact || n.text)) {
+        lines.push(`▶ STAND · ${r[0]} (${r[1]}) · ${tier.name}`);
+        if (n.contact) lines.push(`   Contact: ${n.contact}`);
+        if (n.text) lines.push(`   Notes:   ${n.text}`);
+        lines.push("");
+      }
+    });
+  });
+  if (lines.length <= 3) lines.push("(no notes yet — add them from the Schedule and Big 5 tabs)");
+  return lines.join("\n");
+}
+
+// ---------- ROOT ------------------------------------------------
 const TABS = [
   { id: "home", icon: "🏠", label: "Trip" },
   { id: "travel", icon: "✈️", label: "Travel" },
@@ -393,16 +502,32 @@ const TABS = [
 
 export default function App() {
   const [tab, setTab] = useState("home");
-  const [selectedDay, setSelectedDay] = useState("sat21");
-  const [done, setDone] = useState(loadDone);
+  const [selectedDay, setSelectedDay] = useState(defaultDayId);
+  const [done, setDone] = useState(() => load(LS_DONE));
+  const [notes, setNotes] = useState(() => load(LS_NOTES));
 
   useEffect(() => {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(done)); } catch { /* storage unavailable */ }
+    try { localStorage.setItem(LS_DONE, JSON.stringify(done)); } catch { /* storage unavailable */ }
   }, [done]);
+  useEffect(() => {
+    try { localStorage.setItem(LS_NOTES, JSON.stringify(notes)); } catch { /* storage unavailable */ }
+  }, [notes]);
 
   const toggle = (id) => setDone((d) => ({ ...d, [id]: !d[id] }));
   const reset = () => { if (window.confirm("Reset all checkmarks?")) setDone({}); };
+  const setNote = (id, field, value) =>
+    setNotes((m) => ({ ...m, [id]: { ...(m[id] || {}), [field]: value } }));
   const goto = (t, dayId) => { setTab(t); if (dayId) setSelectedDay(dayId); window.scrollTo(0, 0); };
+
+  const exportNotes = async () => {
+    const text = buildNotesText(notes);
+    try {
+      await navigator.clipboard.writeText(text);
+      window.alert("✓ All notes copied to clipboard — paste into email, WhatsApp or CRM.");
+    } catch {
+      window.prompt("Copy your notes:", text);
+    }
+  };
 
   const pendingUrgent = useMemo(() => REMINDERS.filter((r) => r.urgent && !done[r.id]).length, [done]);
 
@@ -414,10 +539,10 @@ export default function App() {
       </header>
 
       <main className="content">
-        {tab === "home" && <Home done={done} goto={goto} />}
+        {tab === "home" && <Home done={done} notes={notes} goto={goto} exportNotes={exportNotes} />}
         {tab === "travel" && <Travel />}
-        {tab === "schedule" && <Schedule selectedDay={selectedDay} setSelectedDay={setSelectedDay} />}
-        {tab === "big5" && <Big5 />}
+        {tab === "schedule" && <Schedule selectedDay={selectedDay} setSelectedDay={setSelectedDay} notes={notes} setNote={setNote} />}
+        {tab === "big5" && <Big5 notes={notes} setNote={setNote} />}
         {tab === "reminders" && <Reminders done={done} toggle={toggle} reset={reset} />}
         {tab === "info" && <Info />}
       </main>
